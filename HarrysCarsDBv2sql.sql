@@ -4,17 +4,17 @@ USE master
 GO
 
 IF EXISTS (SELECT * FROM sysdatabases WHERE name = 'HarrysCarsDB')
-BEGIN
-ALTER DATABASE HarrysCarsDB
-SET SINGLE_USER
-WITH ROLLBACK IMMEDIATE
+	BEGIN
+	ALTER DATABASE HarrysCarsDB
+	SET SINGLE_USER
+	WITH ROLLBACK IMMEDIATE
 
-DROP DATABASE HarrysCarsDB
-PRINT 'Database dropped successfully'
-END
-ELSE 
-BEGIN
-PRINT 'Database does not exist'
+	DROP DATABASE HarrysCarsDB
+	PRINT 'Database dropped successfully'
+	END
+	ELSE 
+	BEGIN
+	PRINT 'Database does not exist'
 END
 GO
 
@@ -25,17 +25,17 @@ USE HarrysCarsDB
 
 CREATE TABLE Users
 (
-UserID INT PRIMARY KEY IDENTITY(1,1),
-Email NVARCHAR(255) UNIQUE NOT NULL,
-PwdHash VARCHAR(MAX) NOT NULL,
-FirstName NVARCHAR(255) NOT NULL,
-LastName NVARCHAR(255) NOT NULL,
-StreetName NVARCHAR(255) NOT NULL,
-StreetNumber SMALLINT NOT NULL,
-PostalCode VARCHAR(30) NOT NULL,
-City NVARCHAR(255) NOT NULL,
-Country NVARCHAR(60) NOT NULL,
-UserType CHAR(1) CHECK (UserType IN ('A', 'C')) NOT NULL,
+	UserID INT PRIMARY KEY IDENTITY(1,1),
+	Email NVARCHAR(255) UNIQUE NOT NULL,
+	PwdHash VARCHAR(MAX) NOT NULL,
+	FirstName NVARCHAR(255) NOT NULL,
+	LastName NVARCHAR(255) NOT NULL,
+	StreetName NVARCHAR(255) NOT NULL,
+	StreetNumber SMALLINT NOT NULL,
+	PostalCode VARCHAR(30) NOT NULL,
+	City NVARCHAR(255) NOT NULL,
+	Country NVARCHAR(60) NOT NULL,
+	UserType CHAR(1) CHECK (UserType IN ('A', 'C')) NOT NULL,
 )
 GO
 CREATE PROCEDURE AddNewUser 
@@ -66,8 +66,8 @@ GO
 
 CREATE PROCEDURE DeleteUser @userid INT
 AS
- DELETE FROM Users
- WHERE UserID = @userid
+	 DELETE FROM Users
+	 WHERE UserID = @userid
 GO
 
 CREATE PROCEDURE ResetUserPass @userid INT = NULL, @UserEmail NVARCHAR(255)= NULL
@@ -96,10 +96,8 @@ AS
 		PwdHash = 'RESETCODE'
 		WHERE @UserEmail = Email
 	END
-	PRINT ('An email has been sent to ' + @currentuseremail + ' the user with instructions on how to reset their password' )
+	PRINT ('An email has been sent to ' + @currentuseremail + ' with instructions on how to reset their password' )
 GO
-exec ResetUserPass 1,null
-
 
 CREATE INDEX LastName 
 ON Users (LastName)
@@ -139,14 +137,14 @@ VALUES
 GO
 CREATE TABLE SysLog
 (
-SysLogID INT PRIMARY KEY IDENTITY(1,1),
-UserID INT,
-FOREIGN KEY (UserID) REFERENCES Users(UserID)
-ON DELETE SET NULL,
-IPAddress VARBINARY(16),
-Email NVARCHAR(255) NOT NULL,
-DateTime DATETIME NOT NULL,
-IsAuthenticated BIT NOT NULL
+	SysLogID INT PRIMARY KEY IDENTITY(1,1),
+	UserID INT,
+	FOREIGN KEY (UserID) REFERENCES Users(UserID)
+	ON DELETE SET NULL,
+	IPAddress VARBINARY(16),
+	Email NVARCHAR(255) NOT NULL,
+	DateTime DATETIME NOT NULL,
+	IsAuthenticated BIT NOT NULL
 )
 INSERT INTO SysLog (UserID, IPAddress, Email, DateTime, IsAuthenticated)
 VALUES
@@ -208,19 +206,20 @@ ON SysLog (Email)
 GO
 
 CREATE PROCEDURE LastNonAuthLogon
-AS
-BEGIN
-SELECT *
-FROM SysLog
-WHERE IsAuthenticated = 0
-END
+	AS
+		BEGIN
+		SELECT TOP(1) *
+		FROM SysLog
+		WHERE IsAuthenticated = 0
+		ORDER BY SYSLOG.DateTime DESC
+	END
 GO
 
 
 CREATE TABLE PaymentMethods
 (
-PaymentID INT PRIMARY KEY IDENTITY(1,1),
-PaymentType VARCHAR(25)
+	PaymentID INT PRIMARY KEY IDENTITY(1,1),
+	PaymentType VARCHAR(25)
 )
 INSERT INTO PaymentMethods (PaymentType)
 VALUES
@@ -232,9 +231,9 @@ VALUES
 
 CREATE TABLE DeliveryOptions
 (
-DeliveryID INT PRIMARY KEY IDENTITY(1,1),
-DeliveryPrice SMALLINT,
-DeliveryType VARCHAR(100)
+	DeliveryID INT PRIMARY KEY IDENTITY(1,1),
+	DeliveryPrice SMALLINT,
+	DeliveryType VARCHAR(100)
 )
 INSERT INTO DeliveryOptions (DeliveryPrice, DeliveryType)
 VALUES
@@ -244,17 +243,17 @@ VALUES
 
 CREATE TABLE Orders
 (
-OrderID INT PRIMARY KEY IDENTITY(1,1),
-UserID INT,
-TotalAmount INT,
-DeliveryOption INT,
-OrderDate DATETIME NOT NULL,
-Fullfillment BIT NOT NULL,
-PaymentMethod INT NOT NULL,
-FOREIGN KEY (UserID) REFERENCES Users(UserID)
-ON DELETE SET NULL,
-FOREIGN KEY (DeliveryOption) REFERENCES DeliveryOptions(DeliveryID),
-FOREIGN KEY (PaymentMethod) REFERENCES PaymentMethods(PaymentID)
+	OrderID INT PRIMARY KEY IDENTITY(1,1),
+	UserID INT,
+	TotalAmount INT,
+	DeliveryOption INT,
+	OrderDate DATETIME NOT NULL,
+	Fullfillment BIT NOT NULL,
+	PaymentMethod INT NOT NULL,
+	FOREIGN KEY (UserID) REFERENCES Users(UserID)
+	ON DELETE SET NULL,
+	FOREIGN KEY (DeliveryOption) REFERENCES DeliveryOptions(DeliveryID),
+	FOREIGN KEY (PaymentMethod) REFERENCES PaymentMethods(PaymentID)
 )
 INSERT INTO Orders (UserID, TotalAmount, DeliveryOption, OrderDate, Fullfillment, PaymentMethod)
 VALUES
@@ -317,15 +316,15 @@ VALUES
 
 CREATE TABLE Warehouse
 (
-WarehouseID INT PRIMARY KEY IDENTITY(1,1),
-WarehouseName NVARCHAR(50) NOT NULL,
-StreetName NVARCHAR(255) NOT NULL,
-StreetNumber INT NOT NULL,
-Postalcode VARCHAR(30) NOT NULL,
-City NVARCHAR(255),
-Country NVARCHAR(255),
-Phone INT NOT NULL,
-Email NVARCHAR(100)
+	WarehouseID INT PRIMARY KEY IDENTITY(1,1),
+	WarehouseName NVARCHAR(50) NOT NULL,
+	StreetName NVARCHAR(255) NOT NULL,
+	StreetNumber INT NOT NULL,
+	Postalcode VARCHAR(30) NOT NULL,
+	City NVARCHAR(255),
+	Country NVARCHAR(255),
+	Phone INT NOT NULL,
+	Email NVARCHAR(100)
 )
 INSERT INTO Warehouse (WarehouseName, StreetName, StreetNumber, Postalcode, City, Country, Phone, Email)
 VALUES
@@ -335,24 +334,24 @@ VALUES
 
 CREATE TABLE OrderLines
 (
-OrderLineID INT PRIMARY KEY IDENTITY(1,1),
-OrderID INT NOT NULL,
-ProductID INT NOT NULL,
-ProductName NVARCHAR(255) NOT NULL,
-Quantity INT NOT NULL,
-UnitPrice DECIMAL(10, 2) NOT NULL,
-ShippedDate DATE,
-WarehouseID INT,
-Notes NVARCHAR(MAX)
-FOREIGN KEY (OrderID) REFERENCES Orders(OrderID),
-FOREIGN KEY (WarehouseID) REFERENCES Warehouse(WarehouseID)
+	OrderLineID INT PRIMARY KEY IDENTITY(1,1),
+	OrderID INT NOT NULL,
+	ProductID INT NOT NULL,
+	ProductName NVARCHAR(255) NOT NULL,
+	Quantity INT NOT NULL,
+	UnitPrice DECIMAL(10, 2) NOT NULL,
+	ShippedDate DATE,
+	WarehouseID INT,
+	Notes NVARCHAR(MAX)
+	FOREIGN KEY (OrderID) REFERENCES Orders(OrderID),
+	FOREIGN KEY (WarehouseID) REFERENCES Warehouse(WarehouseID)
 )
 
 CREATE TABLE Suppliers
 (
-SupplierID INT PRIMARY KEY IDENTITY(1,1),
-OrgName NVARCHAR(255) NOT NULL,
-Country NVARCHAR(255)
+	SupplierID INT PRIMARY KEY IDENTITY(1,1),
+	OrgName NVARCHAR(255) NOT NULL,
+	Country NVARCHAR(255)
 )
 INSERT INTO Suppliers (OrgName, Country)
 VALUES
@@ -364,8 +363,8 @@ VALUES
 
 CREATE TABLE Colors
 (
-ColorID INT PRIMARY KEY IDENTITY(1,1),
-ColorName VARCHAR(15)
+	ColorID INT PRIMARY KEY IDENTITY(1,1),
+	ColorName VARCHAR(15)
 )
 INSERT INTO Colors (ColorName)
 VALUES
@@ -392,18 +391,18 @@ VALUES
 
 CREATE TABLE Products
 (
-ProductID INT PRIMARY KEY IDENTITY(1,1),
-ProductName NVARCHAR(255) NOT NULL,
-SupplierID INT NOT NULL,
-Color INT,
-ProductWeight INT,
-UnitPrice DECIMAL (10, 2) NOT NULL,
-TaxAmt TINYINT,
-IsActive BIT NOT NULL,
-CreatedDate DATETIME NOT NULL,
-LastEdited DATETIME NOT NULL,
-FOREIGN KEY (SupplierID) REFERENCES Suppliers(SupplierID),
-FOREIGN KEY (Color) REFERENCES Colors(ColorID)
+	ProductID INT PRIMARY KEY IDENTITY(1,1),
+	ProductName NVARCHAR(255) NOT NULL,
+	SupplierID INT NOT NULL,
+	Color INT,
+	ProductWeight INT,
+	UnitPrice DECIMAL (10, 2) NOT NULL,
+	TaxAmt TINYINT,
+	IsActive BIT NOT NULL,
+	CreatedDate DATETIME NOT NULL,
+	LastEdited DATETIME NOT NULL,
+	FOREIGN KEY (SupplierID) REFERENCES Suppliers(SupplierID),
+	FOREIGN KEY (Color) REFERENCES Colors(ColorID)
 )
 
 INSERT INTO Products (ProductName, SupplierID, Color, ProductWeight, UnitPrice, TaxAmt, IsActive, CreatedDate, LastEdited)
@@ -454,3 +453,39 @@ VALUES
     ('Smart Door Lock', 4, 20, 3.5, 199.00, 15, 1, '2025-01-17', '2025-01-17'),
     ('Portable Bluetooth Receiver', 5, 17, 0.3, 12.49, 2, 1, '2025-01-17', '2025-01-17')
 
+GO
+CREATE VIEW Userlogin AS
+
+	WITH LastAuthenticLogon AS
+	(
+		SELECT userid, MAX(DateTime) AS [Successful logon]
+		FROM SysLog
+		WHERE IsAuthenticated = 1
+		GROUP BY UserID
+		),
+	LastNonAuthenticLogon AS
+	(
+		SELECT userid, MAX(Datetime) AS [Not Successful logon]
+		FROM SysLog
+		WHERE IsAuthenticated = 0
+		GROUP BY UserID
+	)
+
+	SELECT u.Email, u.FirstName, u.LastName, [Successful logon], [Not Successful logon]
+	FROM Users u
+	LEFT JOIN SysLog sl ON u.UserID = sl.UserID
+	LEFT JOIN LastAuthenticLogon lal ON u.UserID = lal.UserID
+	LEFT JOIN LastNonAuthenticLogon lnal ON u.UserID = lnal.UserID
+	GROUP BY u.Email, FirstName, LastName, [Successful logon], [Not Successful logon]
+GO
+
+CREATE VIEW AttemptedLogins AS
+	SELECT UserID, Email, COUNT(isauthenticated) [Successful]
+	FROM SysLog
+	WHERE IsAuthenticated = 1
+	GROUP BY UserID, Email
+
+	SELECT UserID, Email, COUNT(isauthenticated) [Not Successful]
+	FROM SysLog
+	WHERE IsAuthenticated = 0
+	GROUP BY UserID, Email
