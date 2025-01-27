@@ -23,6 +23,24 @@ GO
 
 USE HarrysCarsDB
 
+--Activate email settings
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE;
+EXEC sp_configure 'Database Mail XPs', 1;
+RECONFIGURE;
+/* --Email profile setup
+EXEC msdb.dbo.sysmail_add_account_sp
+@account_name = 'Server testing mail',
+@description = 'testmail',
+@email_address = 'YOURMAIL',
+@display_name = 'SQL SERVER TEST',
+@mailserver_name = 'smtp.gmail.com',
+@mailserver_type = 'SMTP',
+@port = 587,
+@username = 'YOUREMAIL',
+@password = 'YOURPASSWORD',
+@enable_ssl = 1
+*/
 CREATE TABLE Users
 (
 	UserID INT PRIMARY KEY IDENTITY(1,1),
@@ -35,7 +53,7 @@ CREATE TABLE Users
 	PostalCode VARCHAR(30) NOT NULL,
 	City NVARCHAR(255) NOT NULL,
 	Country NVARCHAR(60) NOT NULL,
-	UserType CHAR(1) CHECK (UserType IN ('A', 'C')) NOT NULL,
+	UserType CHAR(1) CHECK (UserType IN ('A', 'C')) DEFAULT 'C' NOT NULL,
 )
 GO
 CREATE PROCEDURE AddNewUser 
@@ -54,6 +72,12 @@ BEGIN
 	BEGIN TRY
 	INSERT INTO Users ( Email, PwdHash, FirstName, LastName, StreetName, StreetNumber, PostalCode, City, Country, UserType)
 	VALUES (@Email, @PwdHash, @FirstName, @LastName, @StreetName, @StreetNumber, @PostalCode, @City, @Country, @UserType)
+		EXEC msdb.dbo.sp_send_dbmail
+		@profile_name = 'SQL SERVER MAIL',
+		@recipients = @Email,
+		@subject = 'VERIFY your account',
+		@body = '0',
+		@body_format = 'TEXT'
 	END TRY
 	BEGIN CATCH 
 	DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
@@ -479,7 +503,7 @@ CREATE VIEW Userlogin AS
 	GROUP BY u.Email, FirstName, LastName, [Successful logon], [Not Successful logon]
 GO
 
-CREATE VIEW AttemptedLogins AS
+/*CREATE VIEW AttemptedLogins AS
 	SELECT UserID, Email, COUNT(isauthenticated) [Successful]
 	FROM SysLog
 	WHERE IsAuthenticated = 1
@@ -488,4 +512,4 @@ CREATE VIEW AttemptedLogins AS
 	SELECT UserID, Email, COUNT(isauthenticated) [Not Successful]
 	FROM SysLog
 	WHERE IsAuthenticated = 0
-	GROUP BY UserID, Email
+	GROUP BY UserID, Email */
