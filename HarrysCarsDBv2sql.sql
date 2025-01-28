@@ -41,11 +41,15 @@ EXEC msdb.dbo.sysmail_add_account_sp
 @password = 'YOURPASSWORD',
 @enable_ssl = 1
 */
+
+
+
 CREATE TABLE Users
 (
 	UserID INT PRIMARY KEY IDENTITY(1,1),
 	Email NVARCHAR(255) UNIQUE NOT NULL,
 	PwdHash VARCHAR(MAX) NOT NULL,
+	Salt VARCHAR(50) DEFAULT CONVERT(NVARCHAR(50),NEWID()),
 	FirstName NVARCHAR(255) NOT NULL,
 	LastName NVARCHAR(255) NOT NULL,
 	StreetName NVARCHAR(255) NOT NULL,
@@ -54,7 +58,11 @@ CREATE TABLE Users
 	City NVARCHAR(255) NOT NULL,
 	Country NVARCHAR(60) NOT NULL,
 	UserType CHAR(1) CHECK (UserType IN ('A', 'C')) DEFAULT 'C' NOT NULL,
+	IsActive BIT DEFAULT 1
 )
+GO
+
+
 GO
 CREATE PROCEDURE AddNewUser 
     @Email NVARCHAR(255),
@@ -66,12 +74,15 @@ CREATE PROCEDURE AddNewUser
     @PostalCode VARCHAR(30),
     @City NVARCHAR(255),
     @Country NVARCHAR(60),
-    @UserType CHAR(1)
+    @UserType CHAR(1),
+	@IsActive BIT
 AS
 BEGIN
 	BEGIN TRY
-	INSERT INTO Users ( Email, PwdHash, FirstName, LastName, StreetName, StreetNumber, PostalCode, City, Country, UserType)
-	VALUES (@Email, @PwdHash, @FirstName, @LastName, @StreetName, @StreetNumber, @PostalCode, @City, @Country, @UserType)
+	DECLARE @Salt NVARCHAR(50)
+	SELECT @Salt = CONVERT(NVARCHAR(50),NEWID())
+	INSERT INTO Users ( Email, PwdHash, Salt, FirstName, LastName, StreetName, StreetNumber, PostalCode, City, Country, UserType, IsActive)
+	VALUES (@Email, @PwdHash,@Salt, @FirstName, @LastName, @StreetName, @StreetNumber, @PostalCode, @City, @Country, @UserType, @IsActive)
 		EXEC msdb.dbo.sp_send_dbmail
 		@profile_name = 'SQL SERVER MAIL',
 		@recipients = @Email,
@@ -93,10 +104,26 @@ AS
 	 DELETE FROM Users
 	 WHERE UserID = @userid
 GO
+CREATE PROCEDURE DisableUser @userid INT
+AS
+	UPDATE Users
+	SET IsActive = 0
+	WHERE UserID = @userid
 
+GO
 CREATE PROCEDURE ResetUserPass @userid INT = NULL, @UserEmail NVARCHAR(255)= NULL
 AS
 	DECLARE @currentuseremail NVARCHAR(255)
+	DECLARE @Resetcode NVARCHAR(50)
+	SELECT @Resetcode = CONVERT(NVARCHAR(50),NEWID())
+	CREATE TABLE ##resetpass
+	(
+	resetcode NVARCHAR(50),
+	Validfrom DATETIME,
+	Validto DATETIME
+	)
+	INSERT INTO ##resetpass (resetcode, Validfrom, Validto)
+	VALUES(@Resetcode,GETDATE(),DATEADD(DAY,1,GETDATE()))
 	IF @userid IS NOT NULL
 		BEGIN
 
@@ -105,7 +132,7 @@ AS
 		WHERE UserID = @userid
 
 		UPDATE Users
-		SET PwdHash = 'RESETCODE'
+		SET PwdHash = @Resetcode
 		WHERE UserID = @userid
 	END
 	ELSE IF @UserEmail IS NOT NULL
@@ -120,6 +147,12 @@ AS
 		PwdHash = 'RESETCODE'
 		WHERE @UserEmail = Email
 	END
+		EXEC msdb.dbo.sp_send_dbmail
+		@profile_name = 'SQL SERVER MAIL',
+		@recipients = @currentuseremail,
+		@subject = 'Password reset',
+		@body = 'Password reset token: ',
+		@body_format = 'TEXT'
 	PRINT ('An email has been sent to ' + @currentuseremail + ' with instructions on how to reset their password' )
 GO
 
@@ -131,6 +164,9 @@ CREATE INDEX PostalCode
 ON Users (PostalCode)
 
 GO
+
+
+
 INSERT INTO Users (Email, PwdHash, FirstName, LastName, StreetName, StreetNumber, PostalCode, City, Country, UserType)
 VALUES
 ('john.doe@example.com', '$argon2i$v=19$m=65536,t=3,p=4$OmtFQKXk8g9vHtAXM1QpUQ$zX6XTZh4jlqjH7zFtNjwI+msUOXzB92FVTx3MkmqlJk', 'John', 'Doe', 'Elm St', '10', '12345', 'New York', 'USA', 'A'),
@@ -142,8 +178,8 @@ VALUES
 ('bob.johnson@msn.com', '$argon2i$v=19$m=65536,t=3,p=4$fX5Nk8Qj4Lm8ksEJoK+pTg$D3TGITXKH9/NyFRFtInG9Uy3Rl0XT7m8lP9vL7KWEs4', 'Bob', 'Johnson', 'Maple Avenue', '30', '98765', 'New York', 'USA', 'C'),
 ('clara.evans@aol.com', '$argon2i$v=19$m=65536,t=3,p=4$k6NPRj9X8FBNLY5GIK3YTg$FTK91y6K9mHRy7Wv3FSI3F9T1MTX2mL8oP8kW3J1LyI', 'Clara', 'Evans', 'Birch Boulevard', '18', '54321', 'Austin', 'USA', 'C'),
 ('david.brown@outlook.com', '$argon2i$v=19$m=65536,t=3,p=4$L6MJ8kX9YN2LX8RFG9jTJg$Y9TY9RG2W9+J5FSTJIT8MX7OY', 'David', 'Brown', 'Cedar Lane', '45', '11223', 'Miami', 'USA', 'C'),
-('emily.clark@hotmail.com', '$argon2i$v=19$m=65536,t=3,p=4$Q2NP6Lj9RFG9tJ5IK8MTYA$D1F+X9vTYL7MJ2W9RFTJIT8K', 'Emily', 'Clark', 'Willow Way', '27', '65432', 'Seattle', 'USA', 'C'),
-('frank.martin@gmail.com', '$argon2i$v=19$m=65536,t=3,p=4$Y8JTX5NPRGF9IK2MX9TLJG$H5T9X2LY9JMK7OYITF9M1RG', 'Frank', 'Martin', 'Chestnut Court', '31', '45678', 'Boston', 'USA', 'C'),
+('emily.clark@hotmail.com', '$argon2i$v=19$m=65536,t=3,p=4$Q2NP6Lj9RFG9tJ5IK8MTYA$D1F+X9vTYL7MJ2W9RFTJIT8K','Emily', 'Clark', 'Willow Way', '27', '65432', 'Seattle', 'USA', 'C'),
+('frank.martin@gmail.com', '$argon2i$v=19$m=65536,t=3,p=4$Y8JTX5NPRGF9IK2MX9TLJG$H5T9X2LY9JMK7OYITF9M1RG','Frank', 'Martin', 'Chestnut Court', '31', '45678', 'Boston', 'USA', 'C'),
 ('george.white@protonmail.com', '$argon2i$v=19$m=65536,t=3,p=4$K9TY6MJ2LY9RG5TFIT8NXP$Q2MJ1XLYRG9N8F5KJTW9OY', 'George', 'White', 'Poplar Drive', '38', '98789', 'Denver', 'USA', 'C'),
 ('hannah.thomas@yahoo.com', '$argon2i$v=19$m=65536,t=3,p=4$X2MJ6LYRG5T9NIT8JTXF9O$L9XT5MJRGF1K8N9Y2OJITW', 'Hannah', 'Thomas', 'Aspen Way', '22', '21345', 'Atlanta', 'USA', 'C'),
 ('isabella.moore@msn.com', '$argon2i$v=19$m=65536,t=3,p=4$P9MJ2RGF6LY9X8NIT5OJTW$H1T8K9N5J2LYRGXT9OYMJIT', 'Isabella', 'Moore', 'Oakwood Avenue', '19', '34567', 'Phoenix', 'USA', 'C'),
