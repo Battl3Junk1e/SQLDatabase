@@ -113,47 +113,57 @@ AS
 GO
 CREATE PROCEDURE ResetUserPass @userid INT = NULL, @UserEmail NVARCHAR(255)= NULL
 AS
-	DECLARE @currentuseremail NVARCHAR(255)
-	DECLARE @Resetcode NVARCHAR(50)
-	SELECT @Resetcode = CONVERT(NVARCHAR(50),NEWID())
-	CREATE TABLE ##resetpass
-	(
-	resetcode NVARCHAR(50),
-	Validfrom DATETIME,
-	Validto DATETIME
-	)
-	INSERT INTO ##resetpass (resetcode, Validfrom, Validto)
-	VALUES(@Resetcode,GETDATE(),DATEADD(DAY,1,GETDATE()))
-	IF @userid IS NOT NULL
-		BEGIN
+BEGIN
+	BEGIN TRY
+		DECLARE @currentuseremail NVARCHAR(255)
+		DECLARE @Resetcode NVARCHAR(50)
+		SELECT @Resetcode = CONVERT(NVARCHAR(50),NEWID())
+		CREATE TABLE ##resetpass
+		(
+		resetcode NVARCHAR(50),
+		Validfrom DATETIME,
+		Validto DATETIME
+		)
+		INSERT INTO ##resetpass (resetcode, Validfrom, Validto)
+		VALUES(@Resetcode,GETDATE(),DATEADD(DAY,1,GETDATE()))
+		IF @userid IS NOT NULL
+			BEGIN
 
-		SELECT @currentuseremail = email
-		FROM Users
-		WHERE UserID = @userid
+			SELECT @currentuseremail = email
+			FROM Users
+			WHERE UserID = @userid
 
-		UPDATE Users
-		SET PwdHash = @Resetcode
-		WHERE UserID = @userid
-	END
-	ELSE IF @UserEmail IS NOT NULL
-		BEGIN
+			UPDATE Users
+			SET PwdHash = @Resetcode
+			WHERE UserID = @userid
+		END
+		ELSE IF @UserEmail IS NOT NULL
+			BEGIN
 
-		SELECT @currentuseremail = email
-		FROM Users
-		WHERE @UserEmail = Email
+			SELECT @currentuseremail = email
+			FROM Users
+			WHERE @UserEmail = Email
 
-		UPDATE Users
-		SET
-		PwdHash = 'RESETCODE'
-		WHERE @UserEmail = Email
-	END
-		EXEC msdb.dbo.sp_send_dbmail
-		@profile_name = 'SQL SERVER MAIL',
-		@recipients = @currentuseremail,
-		@subject = 'Password reset',
-		@body = 'Password reset token: ',
-		@body_format = 'TEXT'
-	PRINT ('An email has been sent to ' + @currentuseremail + ' with instructions on how to reset their password' )
+			UPDATE Users
+			SET
+			PwdHash = 'RESETCODE'
+			WHERE @UserEmail = Email
+		END
+			EXEC msdb.dbo.sp_send_dbmail
+			@profile_name = 'SQL SERVER MAIL',
+			@recipients = @currentuseremail,
+			@subject = 'Password reset',
+			@body = 'Password reset token: ',
+			@body_format = 'TEXT'
+		PRINT ('An email has been sent to ' + @currentuseremail + ' with instructions on how to reset their password' )
+	END TRY
+	BEGIN CATCH
+		DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
+		DECLARE @ErrorSeverity INT = ERROR_SEVERITY()
+		DECLARE @ErrorState INT = ERROR_STATE()
+		RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState)
+	END CATCH
+END
 	/*
 	WAITFOR DELAY '24:00:00'
 	DROP ##resetpass
@@ -212,9 +222,9 @@ CREATE TABLE SysLog
 )
 INSERT INTO SysLog (UserID, IPAddress, Email, DateTime, IsAuthenticated)
 VALUES
-(1, 0xC0A80001, 'john.doe@example.com', '2024-05-12 13:20:00', 0),
-(1, 0xC0A80001, 'john.doe@example.com', '2024-03-01 08:45:30', 0),
-(1, 0xC0A80001, 'john.doe@example.com', '2024-04-19 09:53:42', 0),
+(1, 0xC0A80001, 'john.doe@example.com', '2024-05-12 13:20:00', 1),
+(1, 0xC0A80001, 'john.doe@example.com', '2024-03-01 08:45:30', 1),
+(1, 0xC0A80001, 'john.doe@example.com', '2024-04-19 09:53:42', 1),
 (1, 0xC0A80001, 'john.doe@example.com', '2024-08-07 15:22:28', 0),
 (2, 0xC0A80002, 'jane.smith@example.com', '2024-07-21 14:55:17', 1),
 (3, 0xC0A80003, 'alice.johnson@example.com', '2024-09-05 10:35:25', 1),
@@ -518,7 +528,7 @@ VALUES
     ('Portable Bluetooth Receiver', 5, 17, 0.3, 12.49, 2, 1, '2025-01-17', '2025-01-17')
 
 GO
-CREATE VIEW Userlogin AS
+CREATE VIEW UserLogin AS
 
 	WITH LastAuthenticLogon AS
 	(
@@ -545,19 +555,48 @@ GO
 
 CREATE VIEW AmountofLogins AS
 
-
-SELECT Email, IPAddress,
-	   COUNT(*) AS [Total login attempts],
-	   COUNT(CASE WHEN IsAuthenticated = 1 THEN 1 END)OVER(PARTITION BY userid) AS [Successful Attempts],
-	   COUNT(CASE WHEN IsAuthenticated = 0 THEN 1 END)OVER(PARTITION BY ipaddress) AS [Not Successful Attempts]
-FROM SysLog
-GROUP BY Email, IPAddress, UserID, IsAuthenticated
-
-/*
-Lyckade och misslyckade inlogg per ip
-totalt, lyckade och inte
-genomsnitt av lyckade
-sortera ökande
-*/
+	SELECT Email, IPAddress,
+		COUNT(*) OVER(PARTITION BY Email, IPAddress ORDER BY DateTime) AS [Total Attempts],
+		COUNT(CASE WHEN IsAuthenticated = 1 THEN 1 END) OVER(PARTITION BY Email, IPAddress ORDER BY DateTime) AS [Successful Attempts],
+		COUNT(CASE WHEN IsAuthenticated = 0 THEN 1 END) OVER(PARTITION BY Email, IPAddress ORDER BY DateTime) AS [Not Successful Attempts],
+		AVG(CAST(IsAuthenticated AS FLOAT)) OVER(PARTITION BY Email, IPAddress ORDER BY DateTime) AS [Average Success Rate],
+		DateTime AS Date
+	FROM SysLog
 
 GO
+
+CREATE PROCEDURE TryLogin @email NVARCHAR(255), @password NVARCHAR(50), @ipaddress VARBINARY(4)
+AS
+BEGIN
+	BEGIN TRY
+		SELECT *
+		FROM Users u 
+		LEFT JOIN SysLog sl ON u.UserID = sl.UserID
+		--TODO: add comparison for inputs to match users, create hashing of inserted password
+		--Counter for failed attempts then disable user
+		--##logtable
+		--if isactive is 0 return error msg "not active user"
+	END TRY
+	BEGIN CATCH
+		DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
+		DECLARE @ErrorSeverity INT = ERROR_SEVERITY()
+		DECLARE @ErrorState INT = ERROR_STATE()
+		RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState)
+	END CATCH
+END
+GO
+
+CREATE PROCEDURE SetForgottenPassword @email NVARCHAR(255), @password NVARCHAR(255), @token NVARCHAR(50)
+AS
+BEGIN
+	BEGIN TRY
+	--check what email, hash the new password, check if token is valid
+
+	END TRY
+	BEGIN CATCH
+		DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
+		DECLARE @ErrorSeverity INT = ERROR_SEVERITY()
+		DECLARE @ErrorState INT = ERROR_STATE()
+		RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState)
+	END CATCH
+END
