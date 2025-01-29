@@ -154,6 +154,10 @@ AS
 		@body = 'Password reset token: ',
 		@body_format = 'TEXT'
 	PRINT ('An email has been sent to ' + @currentuseremail + ' with instructions on how to reset their password' )
+	/*
+	WAITFOR DELAY '24:00:00'
+	DROP ##resetpass
+	*/
 GO
 
 CREATE INDEX LastName 
@@ -201,15 +205,17 @@ CREATE TABLE SysLog
 	UserID INT,
 	FOREIGN KEY (UserID) REFERENCES Users(UserID)
 	ON DELETE SET NULL,
-	IPAddress VARBINARY(16),
+	IPAddress VARBINARY(4),
 	Email NVARCHAR(255) NOT NULL,
 	DateTime DATETIME NOT NULL,
 	IsAuthenticated BIT NOT NULL
 )
 INSERT INTO SysLog (UserID, IPAddress, Email, DateTime, IsAuthenticated)
 VALUES
-(1, 0xC0A80001, 'john.doe@example.com', '2024-05-12 13:20:00', 1),
-(1, 0xA8C0A800, 'john.doe@example.com', '2024-03-01 08:45:30', 1),
+(1, 0xC0A80001, 'john.doe@example.com', '2024-05-12 13:20:00', 0),
+(1, 0xC0A80001, 'john.doe@example.com', '2024-03-01 08:45:30', 0),
+(1, 0xC0A80001, 'john.doe@example.com', '2024-04-19 09:53:42', 0),
+(1, 0xC0A80001, 'john.doe@example.com', '2024-08-07 15:22:28', 0),
 (2, 0xC0A80002, 'jane.smith@example.com', '2024-07-21 14:55:17', 1),
 (3, 0xC0A80003, 'alice.johnson@example.com', '2024-09-05 10:35:25', 1),
 (4, 0xA8C0A801, 'bob.white@example.com', '2024-04-15 16:50:42', 1),
@@ -232,11 +238,9 @@ VALUES
 (21, 0xC0A8000C, 'lukas.müller@yahoo.de', '2024-11-23 10:01:30', 1),
 (22, 0xA8C0A80A, 'hiroshi.tanaka@gmail.com', '2024-03-17 18:43:19', 1),
 (23, 0xC0A8000D, 'fatima.al-farsi@msn.com', '2024-07-09 20:25:54', 1),
-(1, 0xA8C0A80B, 'no.authenticated.email@domain.com', '2024-09-25 17:34:51', 0),
-(1, 0xC0A8000E, 'no.authenticated.email@domain.com', '2024-10-12 14:22:43', 0),
-(1, 0xA8C0A80C, 'no.authenticated.email@domain.com', '2024-12-06 13:17:55', 0),
-(1, 0xC0A80001, 'john.doe@example.com', '2024-04-19 09:53:42', 1),
-(1, 0xA8C0A800, 'john.doe@example.com', '2024-08-07 15:22:28', 1),
+(NULL, 0xA8C0A80B, 'no.authenticated.email@domain.com', '2024-09-25 17:34:51', 0),
+(NULL, 0xC0A8000E, 'no.authenticated.email@domain.com', '2024-10-12 14:22:43', 0),
+(NULL, 0xA8C0A80C, 'no.authenticated.email@domain.com', '2024-12-06 13:17:55', 0),
 (2, 0xC0A80002, 'jane.smith@example.com', '2024-06-17 12:08:14', 1),
 (3, 0xC0A80003, 'alice.johnson@example.com', '2024-02-03 11:16:56', 1),
 (4, 0xA8C0A801, 'bob.white@example.com', '2024-10-28 14:42:33', 1),
@@ -539,13 +543,21 @@ CREATE VIEW Userlogin AS
 	GROUP BY u.Email, FirstName, LastName, [Successful logon], [Not Successful logon]
 GO
 
-/*CREATE VIEW AttemptedLogins AS
-	SELECT UserID, Email, COUNT(isauthenticated) [Successful]
-	FROM SysLog
-	WHERE IsAuthenticated = 1
-	GROUP BY UserID, Email
+CREATE VIEW AmountofLogins AS
 
-	SELECT UserID, Email, COUNT(isauthenticated) [Not Successful]
-	FROM SysLog
-	WHERE IsAuthenticated = 0
-	GROUP BY UserID, Email */
+
+SELECT Email, IPAddress,
+	   COUNT(*) AS [Total login attempts],
+	   COUNT(CASE WHEN IsAuthenticated = 1 THEN 1 END)OVER(PARTITION BY userid) AS [Successful Attempts],
+	   COUNT(CASE WHEN IsAuthenticated = 0 THEN 1 END)OVER(PARTITION BY ipaddress) AS [Not Successful Attempts]
+FROM SysLog
+GROUP BY Email, IPAddress, UserID, IsAuthenticated
+
+/*
+Lyckade och misslyckade inlogg per ip
+totalt, lyckade och inte
+genomsnitt av lyckade
+sortera ökande
+*/
+
+GO
