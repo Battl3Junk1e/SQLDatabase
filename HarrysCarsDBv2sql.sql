@@ -24,10 +24,10 @@ GO
 USE HarrysCarsDB
 
 --Activate email settings
-EXEC sp_configure 'show advanced options', 1;
-RECONFIGURE;
-EXEC sp_configure 'Database Mail XPs', 1;
-RECONFIGURE;
+EXEC sp_configure 'show advanced options', 1
+RECONFIGURE
+EXEC sp_configure 'Database Mail XPs', 1
+RECONFIGURE
 /* --Email profile setup
 EXEC msdb.dbo.sysmail_add_account_sp
 @account_name = 'Server testing mail',
@@ -48,8 +48,8 @@ CREATE TABLE Users
 (
 	UserID INT PRIMARY KEY IDENTITY(1,1),
 	Email NVARCHAR(255) UNIQUE NOT NULL,
-	PwdHash VARCHAR(MAX) NOT NULL,
-	Salt VARCHAR(50) DEFAULT CONVERT(NVARCHAR(50),NEWID()),
+	PwdHash VARCHAR(128) NOT NULL,
+	Salt UNIQUEIDENTIFIER DEFAULT NEWID(),
 	FirstName NVARCHAR(255) NOT NULL,
 	LastName NVARCHAR(255) NOT NULL,
 	StreetName NVARCHAR(255) NOT NULL,
@@ -62,11 +62,31 @@ CREATE TABLE Users
 )
 GO
 
+CREATE FUNCTION fn_HASHPASSWORD
+(
+ @PASSWORD NVARCHAR(128),
+ @SALT UNIQUEIDENTIFIER 
+
+)
+RETURNS VARCHAR(128)
+AS
+BEGIN
+	DECLARE @hashedPassword VARCHAR(128)
+	DECLARE @PwdAndSalt NVARCHAR(128)
+
+	SET @PwdAndSalt = CONCAT(@PASSWORD, CAST(@SALT AS VARCHAR(36)))
+	SET @hashedPassword = CONVERT(VARCHAR(128),HASHBYTES('SHA2_512', @PwdAndSalt),2)
+
+	RETURN @hashedPassword
+END
+
+
+
 
 GO
 CREATE PROCEDURE AddNewUser 
     @Email NVARCHAR(255),
-    @PwdHash VARCHAR(MAX),
+    @PwdHash NVARCHAR(128),
     @FirstName NVARCHAR(255),
     @LastName NVARCHAR(255),
     @StreetName NVARCHAR(255),
@@ -79,10 +99,9 @@ CREATE PROCEDURE AddNewUser
 AS
 BEGIN
 	BEGIN TRY
-	DECLARE @Salt NVARCHAR(50)
-	SELECT @Salt = CONVERT(NVARCHAR(50),NEWID())
+	DECLARE @Salt UNIQUEIDENTIFIER = NEWID()
 	INSERT INTO Users ( Email, PwdHash, Salt, FirstName, LastName, StreetName, StreetNumber, PostalCode, City, Country, UserType, IsActive)
-	VALUES (@Email, @PwdHash,@Salt, @FirstName, @LastName, @StreetName, @StreetNumber, @PostalCode, @City, @Country, @UserType, @IsActive)
+	VALUES (@Email, DBO.fn_HASHPASSWORD(@PwdHash, @Salt),@Salt, @FirstName, @LastName, @StreetName, @StreetNumber, @PostalCode, @City, @Country, @UserType, @IsActive)
 		EXEC msdb.dbo.sp_send_dbmail
 		@profile_name = 'SQL SERVER MAIL',
 		@recipients = @Email,
@@ -99,19 +118,23 @@ BEGIN
 END
 GO
 
-CREATE PROCEDURE DeleteUser @userid INT
+CREATE PROCEDURE DeleteUser 
+	@userid INT
 AS
 	 DELETE FROM Users
 	 WHERE UserID = @userid
 GO
-CREATE PROCEDURE DisableUser @userid INT
+CREATE PROCEDURE DisableUser 
+	@userid INT
 AS
 	UPDATE Users
 	SET IsActive = 0
 	WHERE UserID = @userid
 
 GO
-CREATE PROCEDURE ResetUserPass @userid INT = NULL, @UserEmail NVARCHAR(255)= NULL
+CREATE PROCEDURE ForgotPassword 
+	@userid INT = NULL, 
+	@UserEmail NVARCHAR(255)= NULL
 AS
 BEGIN
 	BEGIN TRY
@@ -169,6 +192,54 @@ END
 	DROP ##resetpass
 	*/
 GO
+CREATE PROCEDURE trylogin 
+	@email NVARCHAR(255),
+	@password NVARCHAR(128),
+	@ipaddress NVARCHAR(128)
+AS
+BEGIN
+	BEGIN TRY
+
+		DECLARE @useremail NVARCHAR(255)
+		DECLARE @userpassword VARCHAR(128)
+		DECLARE @usersalt UNIQUEIDENTIFIER
+		DECLARE @userip NVARCHAR(128)
+		DECLARE @validlogin bit = 0
+		DECLARE @userid INT
+
+		SELECT @userpassword = u.PwdHash, @useremail = u.Email, @userip = sl.IPAddress, @usersalt = u.Salt, @userid = u.UserID
+		FROM Users u
+		LEFT JOIN SysLog sl ON u.UserID = sl.UserID
+		WHERE u.Email = @email AND sl.IPAddress = @ipaddress
+
+		SELECT @validlogin = CASE WHEN @userpassword = dbo.fn_HASHPASSWORD(@password,@usersalt) THEN 1 ELSE 0
+		END
+
+		IF @validlogin = 1 
+		BEGIN
+			PRINT('Valid Login')
+			INSERT INTO SysLog(UserID, IPAddress, Email, DateTime, IsAuthenticated)
+			VALUES(@userid,@ipaddress,@email,GETDATE(),1)
+			SELECT *
+			FROM Users u
+			LEFT JOIN SysLog sl ON u.UserID = sl.UserID
+			WHERE u.Email = @email
+			RETURN
+		END
+		ELSE 
+			PRINT('Not a valid login')
+			INSERT INTO SysLog(UserID, IPAddress, Email, DateTime, IsAuthenticated)
+			VALUES(@userid,@ipaddress,@email,GETDATE(),0)
+	END TRY
+	BEGIN CATCH
+		PRINT 'Error occurred during login process'
+		DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
+		DECLARE @ErrorSeverity INT = ERROR_SEVERITY()
+		DECLARE @ErrorState INT = ERROR_STATE()
+		RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState)
+	END CATCH
+END
+GO
 
 CREATE INDEX LastName 
 ON Users (LastName)
@@ -183,30 +254,30 @@ GO
 
 INSERT INTO Users (Email, PwdHash, FirstName, LastName, StreetName, StreetNumber, PostalCode, City, Country, UserType)
 VALUES
-('john.doe@example.com', '$argon2i$v=19$m=65536,t=3,p=4$OmtFQKXk8g9vHtAXM1QpUQ$zX6XTZh4jlqjH7zFtNjwI+msUOXzB92FVTx3MkmqlJk', 'John', 'Doe', 'Elm St', '10', '12345', 'New York', 'USA', 'A'),
-('jane.smith@example.com', '$argon2i$v=19$m=65536,t=3,p=4$ZtnPqaF8S5cchdyHiB87XA$kHgZT+Uw11Xm3hoyrt+RHq46X0IV6W/5t3tbZ8XZ6Jw', 'Jane', 'Smith', 'Oak Ave', '15', '54321', 'Los Angeles', 'USA', 'C'),
-('alice.johnson@example.com', '$argon2i$v=19$m=65536,t=3,p=4$8WQ8Kqu29IMvZEKbhU8uQA$Bf1z44u8LvqDhgBzQxlhREtYoXGOfK6o8lI6r6kIbhk', 'Alice', 'Johnson', 'Pine Blvd', '20', '67890', 'Chicago', 'USA', 'A'),
-('bob.white@example.com', '$argon2i$v=19$m=65536,t=3,p=4$BhYav4wCVnQkg9MZLrM7jw$lkL5s5KKppsl9LgVZnzwAGVVyI57lSMXgkpZQeTlt/g', 'Bob', 'White', 'Maple Rd', '25', '23456', 'Houston', 'USA', 'C'),
-('charlie.brown@example.com', '$argon2i$v=19$m=65536,t=3,p=4$Dgy0lGgf1XsD1V4MreJwOw$D/ZmZk9fScEdq0vv7FjqwWhd0t1oZ8AB79u48cmG0y0', 'Charlie', 'Brown', 'Birch Ln', '30', '34567', 'San Francisco', 'USA', 'A'),
-('alice.williams@yahoo.com', '$argon2i$v=19$m=65536,t=3,p=4$78dQnpLuDMEZnT6DyIkBPg$JL8JTw3gK/hFRs9xFSItH+XlM1Otyu8c7T1Dx1Vsq4E', 'Alice', 'Williams', 'Pine Road', '12', '12345', 'Chicago', 'USA', 'C'),
-('bob.johnson@msn.com', '$argon2i$v=19$m=65536,t=3,p=4$fX5Nk8Qj4Lm8ksEJoK+pTg$D3TGITXKH9/NyFRFtInG9Uy3Rl0XT7m8lP9vL7KWEs4', 'Bob', 'Johnson', 'Maple Avenue', '30', '98765', 'New York', 'USA', 'C'),
-('clara.evans@aol.com', '$argon2i$v=19$m=65536,t=3,p=4$k6NPRj9X8FBNLY5GIK3YTg$FTK91y6K9mHRy7Wv3FSI3F9T1MTX2mL8oP8kW3J1LyI', 'Clara', 'Evans', 'Birch Boulevard', '18', '54321', 'Austin', 'USA', 'C'),
-('david.brown@outlook.com', '$argon2i$v=19$m=65536,t=3,p=4$L6MJ8kX9YN2LX8RFG9jTJg$Y9TY9RG2W9+J5FSTJIT8MX7OY', 'David', 'Brown', 'Cedar Lane', '45', '11223', 'Miami', 'USA', 'C'),
-('emily.clark@hotmail.com', '$argon2i$v=19$m=65536,t=3,p=4$Q2NP6Lj9RFG9tJ5IK8MTYA$D1F+X9vTYL7MJ2W9RFTJIT8K','Emily', 'Clark', 'Willow Way', '27', '65432', 'Seattle', 'USA', 'C'),
-('frank.martin@gmail.com', '$argon2i$v=19$m=65536,t=3,p=4$Y8JTX5NPRGF9IK2MX9TLJG$H5T9X2LY9JMK7OYITF9M1RG','Frank', 'Martin', 'Chestnut Court', '31', '45678', 'Boston', 'USA', 'C'),
-('george.white@protonmail.com', '$argon2i$v=19$m=65536,t=3,p=4$K9TY6MJ2LY9RG5TFIT8NXP$Q2MJ1XLYRG9N8F5KJTW9OY', 'George', 'White', 'Poplar Drive', '38', '98789', 'Denver', 'USA', 'C'),
-('hannah.thomas@yahoo.com', '$argon2i$v=19$m=65536,t=3,p=4$X2MJ6LYRG5T9NIT8JTXF9O$L9XT5MJRGF1K8N9Y2OJITW', 'Hannah', 'Thomas', 'Aspen Way', '22', '21345', 'Atlanta', 'USA', 'C'),
-('isabella.moore@msn.com', '$argon2i$v=19$m=65536,t=3,p=4$P9MJ2RGF6LY9X8NIT5OJTW$H1T8K9N5J2LYRGXT9OYMJIT', 'Isabella', 'Moore', 'Oakwood Avenue', '19', '34567', 'Phoenix', 'USA', 'C'),
-('sophie.turner@gmail.com', '$argon2i$v=19$m=65536,t=3,p=4$W6JTF9X2M9LYRG8NK1OYIT$J7MTX5LYN9F1RGIK8OYT2JW', 'Sophie', 'Turner', 'Maple Lane', '28', '98745', 'London', 'UK', 'C'),
-('li.wei@outlook.com', '$argon2i$v=19$m=65536,t=3,p=4$N8LY5MJRGXT9OJ1W6K9FITY$X1RJ6MN9LYT5K8FGOY2JITW', 'Li', 'Wei', 'Cherry Street', '35', '100010', 'Beijing', 'China', 'C'),
-('miguel.garcia@yahoo.com', '$argon2i$v=19$m=65536,t=3,p=4$M9LYT5RGF2JX8NK1OY6JTW$P7XTY9RGMN5L8OJ1K6FIT2Y', 'Miguel', 'Garcia', 'Palm Avenue', '24', '28013', 'Madrid', 'Spain', 'C'),
-('emma.johnson@msn.com', '$argon2i$v=19$m=65536,t=3,p=4$R6MJLYT9N8FGX5OJ2IKY1TW$L9RGMN8XT5J6YOIT2K1JF9W', 'Emma', 'Johnson', 'Cypress Drive', '29', 'T5K0L4', 'Toronto', 'Canada', 'C'),
-('noah.davies@protonmail.com', '$argon2i$v=19$m=65536,t=3,p=4$K1MTX5RLYN8F9G2JOIT6JW$Y9RGF5MT2X8K1OJLY6NJITW', 'Noah', 'Davies', 'Willow Street', '33', '3000', 'Melbourne', 'Australia', 'C'),
-('amelie.duval@orange.fr', '$argon2i$v=19$m=65536,t=3,p=4$X9RLYMJ6FITN8K5OYT2JW1$F1RG5MTX9LYN8OJ2IK6TJYW', 'Amelie', 'Duval', 'Hawthorn Road', '27', '75001', 'Paris', 'France', 'C'),
-('lukas.müller@yahoo.de', '$argon2i$v=19$m=65536,t=3,p=4$T2MNLY8K9JX5RJG6OY1FIT$L8Y9MTF5RGN6OJ2K1XTYJW', 'Lukas', 'Müller', 'Beech Lane', '21', '10115', 'Berlin', 'Germany', 'C'),
-('hiroshi.tanaka@gmail.com', '$argon2i$v=19$m=65536,t=3,p=4$M5N9YXT2L6JG1OFIK8RJTY$Y9K5MJRG6N2X8LYOJ1FITW', 'Hiroshi', 'Tanaka', 'Cedar Path', '32', '150-0001', 'Tokyo', 'Japan', 'C'),
-('fatima.al-farsi@msn.com', '$argon2i$v=19$m=65536,t=3,p=4$Y8LYT5MJRGN9F2X6K1OJTW$L9RGMN8XT5JO2YK1IFYTW6J', 'Fatima', 'Al-Farsi', 'Palm Grove', '26', '113', 'Muscat', 'Oman', 'C'),
-('peter.nielsen@gmail.com', '$argon2i$v=19$m=65536,t=3,p=4$R9LYMJ5TN8F2X6OK1OJTWY$L7YXT9M5RGN2K1JO8IFYTW6', 'Peter', 'Nielsen', 'Birch Close', '40', '8000', 'Aarhus', 'Denmark', 'C');
+('john.doe@example.com', 'b5c0b187fe309af0f4d35982fd961d7e', 'John', 'Doe', 'Elm St', '10', '12345', 'New York', 'USA', 'A'),
+('jane.smith@example.com', 'e99a18c428cb38d5f260853678922e03', 'Jane', 'Smith', 'Oak Ave', '15', '54321', 'Los Angeles', 'USA', 'C'),
+('alice.johnson@example.com', '3f79bb7b435b05321651daefd374cd21', 'Alice', 'Johnson', 'Pine Blvd', '20', '67890', 'Chicago', 'USA', 'A'),
+('bob.white@example.com', 'aab3238922bcc25a6f606eb525ffdc56', 'Bob', 'White', 'Maple Rd', '25', '23456', 'Houston', 'USA', 'C'),
+('charlie.brown@example.com', '9bf31c7ff062936a96d3c8bd1f8f2ff3', 'Charlie', 'Brown', 'Birch Ln', '30', '34567', 'San Francisco', 'USA', 'A'),
+('alice.williams@yahoo.com', 'c74d97b01eae257e44aa9d5bade97baf', 'Alice', 'Williams', 'Pine Road', '12', '12345', 'Chicago', 'USA', 'C'),
+('bob.johnson@msn.com', '70efdf2ec9b086079795c442636b55fb', 'Bob', 'Johnson', 'Maple Avenue', '30', '98765', 'New York', 'USA', 'C'),
+('clara.evans@aol.com', '6f4922f45568161a8cdf4ad2299f6d23', 'Clara', 'Evans', 'Birch Boulevard', '18', '54321', 'Austin', 'USA', 'C'),
+('david.brown@outlook.com', 'd1fe173d08e959397adf34b1d77e88d7', 'David', 'Brown', 'Cedar Lane', '45', '11223', 'Miami', 'USA', 'C'),
+('emily.clark@hotmail.com', 'c20ad4d76fe97759aa27a0c99bff6710','Emily', 'Clark', 'Willow Way', '27', '65432', 'Seattle', 'USA', 'C'),
+('frank.martin@gmail.com', 'ec8956637a99787bd197eacd77acce5e','Frank', 'Martin', 'Chestnut Court', '31', '45678', 'Boston', 'USA', 'C'),
+('george.white@protonmail.com', '45c48cce2e2d7fbdea1afc51c7c6ad26', 'George', 'White', 'Poplar Drive', '38', '98789', 'Denver', 'USA', 'C'),
+('hannah.thomas@yahoo.com', '6512bd43d9caa6e02c990b0a82652dca', 'Hannah', 'Thomas', 'Aspen Way', '22', '21345', 'Atlanta', 'USA', 'C'),
+('isabella.moore@msn.com', 'a87ff679a2f3e71d9181a67b7542122c', 'Isabella', 'Moore', 'Oakwood Avenue', '19', '34567', 'Phoenix', 'USA', 'C'),
+('sophie.turner@gmail.com', 'e4da3b7fbbce2345d7772b0674a318d5', 'Sophie', 'Turner', 'Maple Lane', '28', '98745', 'London', 'UK', 'C'),
+('li.wei@outlook.com', '1679091c5a880faf6fb5e6087eb1b2dc', 'Li', 'Wei', 'Cherry Street', '35', '100010', 'Beijing', 'China', 'C'),
+('miguel.garcia@yahoo.com', '8f14e45fceea167a5a36dedd4bea2543', 'Miguel', 'Garcia', 'Palm Avenue', '24', '28013', 'Madrid', 'Spain', 'C'),
+('emma.johnson@msn.com', 'c9f0f895fb98ab9159f51fd0297e236d', 'Emma', 'Johnson', 'Cypress Drive', '29', 'T5K0L4', 'Toronto', 'Canada', 'C'),
+('noah.davies@protonmail.com', '45c48cce2e2d7fbdea1afc51c7c6ad26', 'Noah', 'Davies', 'Willow Street', '33', '3000', 'Melbourne', 'Australia', 'C'),
+('amelie.duval@orange.fr', 'd3d9446802a44259755d38e6d163e820', 'Amelie', 'Duval', 'Hawthorn Road', '27', '75001', 'Paris', 'France', 'C'),
+('lukas.müller@yahoo.de', '6512bd43d9caa6e02c990b0a82652dca', 'Lukas', 'Müller', 'Beech Lane', '21', '10115', 'Berlin', 'Germany', 'C'),
+('hiroshi.tanaka@gmail.com', 'aab3238922bcc25a6f606eb525ffdc56', 'Hiroshi', 'Tanaka', 'Cedar Path', '32', '150-0001', 'Tokyo', 'Japan', 'C'),
+('fatima.al-farsi@msn.com', '9bf31c7ff062936a96d3c8bd1f8f2ff3', 'Fatima', 'Al-Farsi', 'Palm Grove', '26', '113', 'Muscat', 'Oman', 'C'),
+('peter.nielsen@gmail.com', '70efdf2ec9b086079795c442636b55fb', 'Peter', 'Nielsen', 'Birch Close', '40', '8000', 'Aarhus', 'Denmark', 'C')
 
 GO
 CREATE TABLE SysLog
@@ -215,64 +286,65 @@ CREATE TABLE SysLog
 	UserID INT,
 	FOREIGN KEY (UserID) REFERENCES Users(UserID)
 	ON DELETE SET NULL,
-	IPAddress VARBINARY(4),
+	IPAddress NVARCHAR(128),
 	Email NVARCHAR(255) NOT NULL,
 	DateTime DATETIME NOT NULL,
 	IsAuthenticated BIT NOT NULL
 )
 INSERT INTO SysLog (UserID, IPAddress, Email, DateTime, IsAuthenticated)
 VALUES
-(1, 0xC0A80001, 'john.doe@example.com', '2024-05-12 13:20:00', 1),
-(1, 0xC0A80001, 'john.doe@example.com', '2024-03-01 08:45:30', 1),
-(1, 0xC0A80001, 'john.doe@example.com', '2024-04-19 09:53:42', 1),
-(1, 0xC0A80001, 'john.doe@example.com', '2024-08-07 15:22:28', 0),
-(2, 0xC0A80002, 'jane.smith@example.com', '2024-07-21 14:55:17', 1),
-(3, 0xC0A80003, 'alice.johnson@example.com', '2024-09-05 10:35:25', 1),
-(4, 0xA8C0A801, 'bob.white@example.com', '2024-04-15 16:50:42', 1),
-(5, 0xC0A80004, 'charlie.brown@example.com', '2024-10-30 11:27:11', 1),
-(6, 0xA8C0A802, 'alice.williams@yahoo.com', '2024-06-03 09:12:33', 1),
-(7, 0xC0A80005, 'bob.johnson@msn.com', '2024-12-09 18:11:58', 1),
-(8, 0xA8C0A803, 'clara.evans@aol.com', '2024-01-15 07:48:11', 1),
-(9, 0xC0A80006, 'david.brown@outlook.com', '2024-11-02 14:26:59', 1),
-(10, 0xA8C0A804, 'emily.clark@hotmail.com', '2024-05-19 13:44:52', 1),
-(11, 0xC0A80007, 'frank.martin@gmail.com', '2024-08-27 16:15:06', 1),
-(12, 0xA8C0A805, 'george.white@protonmail.com', '2024-02-23 22:51:21', 1),
-(13, 0xC0A80008, 'hannah.thomas@yahoo.com', '2024-07-29 17:09:45', 1),
-(14, 0xA8C0A806, 'isabella.moore@msn.com', '2024-09-16 20:13:59', 1),
-(15, 0xC0A80009, 'sophie.turner@gmail.com', '2024-03-08 12:42:37', 1),
-(16, 0xA8C0A807, 'li.wei@outlook.com', '2024-06-18 11:54:11', 1),
-(17, 0xC0A8000A, 'miguel.garcia@yahoo.com', '2024-10-01 09:22:48', 1),
-(18, 0xA8C0A808, 'emma.johnson@msn.com', '2024-12-13 06:37:15', 1),
-(19, 0xC0A8000B, 'noah.davies@protonmail.com', '2024-02-01 16:04:29', 1),
-(20, 0xA8C0A809, 'amelie.duval@orange.fr', '2024-04-10 14:39:08', 1),
-(21, 0xC0A8000C, 'lukas.müller@yahoo.de', '2024-11-23 10:01:30', 1),
-(22, 0xA8C0A80A, 'hiroshi.tanaka@gmail.com', '2024-03-17 18:43:19', 1),
-(23, 0xC0A8000D, 'fatima.al-farsi@msn.com', '2024-07-09 20:25:54', 1),
-(NULL, 0xA8C0A80B, 'no.authenticated.email@domain.com', '2024-09-25 17:34:51', 0),
-(NULL, 0xC0A8000E, 'no.authenticated.email@domain.com', '2024-10-12 14:22:43', 0),
-(NULL, 0xA8C0A80C, 'no.authenticated.email@domain.com', '2024-12-06 13:17:55', 0),
-(2, 0xC0A80002, 'jane.smith@example.com', '2024-06-17 12:08:14', 1),
-(3, 0xC0A80003, 'alice.johnson@example.com', '2024-02-03 11:16:56', 1),
-(4, 0xA8C0A801, 'bob.white@example.com', '2024-10-28 14:42:33', 1),
-(5, 0xC0A80004, 'charlie.brown@example.com', '2024-05-23 07:59:07', 1),
-(6, 0xA8C0A802, 'alice.williams@yahoo.com', '2024-03-14 17:11:53', 1),
-(7, 0xC0A80005, 'bob.johnson@msn.com', '2024-07-01 16:29:22', 1),
-(8, 0xA8C0A803, 'clara.evans@aol.com', '2024-09-09 09:44:56', 1),
-(9, 0xC0A80006, 'david.brown@outlook.com', '2024-04-25 13:58:39', 1),
-(10, 0xA8C0A804, 'emily.clark@hotmail.com', '2024-01-22 20:02:44', 1),
-(11, 0xC0A80007, 'frank.martin@gmail.com', '2024-05-11 10:21:55', 1),
-(12, 0xA8C0A805, 'george.white@protonmail.com', '2024-08-18 13:34:25', 1),
-(13, 0xC0A80008, 'hannah.thomas@yahoo.com', '2024-07-06 06:56:12', 1),
-(14, 0xA8C0A806, 'isabella.moore@msn.com', '2024-09-20 19:39:29', 1),
-(15, 0xC0A80009, 'sophie.turner@gmail.com', '2024-11-16 21:17:40', 1),
-(16, 0xA8C0A807, 'li.wei@outlook.com', '2024-05-02 16:44:57', 1),
-(17, 0xC0A8000A, 'miguel.garcia@yahoo.com', '2024-06-30 07:22:13', 1),
-(18, 0xA8C0A808, 'emma.johnson@msn.com', '2024-04-05 15:59:44', 1),
-(19, 0xC0A8000B, 'noah.davies@protonmail.com', '2024-10-23 08:14:35', 1),
-(20, 0xA8C0A809, 'amelie.duval@orange.fr', '2024-07-17 12:50:59', 1),
-(21, 0xC0A8000C, 'lukas.müller@yahoo.de', '2024-08-01 14:04:39', 1),
-(22, 0xA8C0A80A, 'hiroshi.tanaka@gmail.com', '2024-02-13 22:47:26', 1),
-(23, 0xC0A8000D, 'fatima.al-farsi@msn.com', '2024-12-03 13:11:08', 1)
+(1, '192.168.0.1', 'john.doe@example.com', '2024-05-12 13:20:00', 1),
+(1, '192.168.0.1', 'john.doe@example.com', '2024-03-01 08:45:30', 1),
+(1, '192.168.0.1', 'john.doe@example.com', '2024-04-19 09:53:42', 1),
+(1, '192.168.0.1', 'john.doe@example.com', '2024-08-07 15:22:28', 0),
+(2, '192.168.0.2', 'jane.smith@example.com', '2024-07-21 14:55:17', 1),
+(3, '192.168.0.3', 'alice.johnson@example.com', '2024-09-05 10:35:25', 1),
+(4, '168.192.168.1', 'bob.white@example.com', '2024-04-15 16:50:42', 1),
+(5, '192.168.0.4', 'charlie.brown@example.com', '2024-10-30 11:27:11', 1),
+(6, '168.192.168.2', 'alice.williams@yahoo.com', '2024-06-03 09:12:33', 1),
+(7, '192.168.0.5', 'bob.johnson@msn.com', '2024-12-09 18:11:58', 1),
+(8, '168.192.168.3', 'clara.evans@aol.com', '2024-01-15 07:48:11', 1),
+(9, '192.168.0.6', 'david.brown@outlook.com', '2024-11-02 14:26:59', 1),
+(10, '168.192.168.4', 'emily.clark@hotmail.com', '2024-05-19 13:44:52', 1),
+(11, '192.168.0.7', 'frank.martin@gmail.com', '2024-08-27 16:15:06', 1),
+(12, '168.192.168.5', 'george.white@protonmail.com', '2024-02-23 22:51:21', 1),
+(13, '192.168.0.8', 'hannah.thomas@yahoo.com', '2024-07-29 17:09:45', 1),
+(14, '168.192.168.6', 'isabella.moore@msn.com', '2024-09-16 20:13:59', 1),
+(15, '192.168.0.9', 'sophie.turner@gmail.com', '2024-03-08 12:42:37', 1),
+(16, '168.192.168.7', 'li.wei@outlook.com', '2024-06-18 11:54:11', 1),
+(17, '192.168.0.10', 'miguel.garcia@yahoo.com', '2024-10-01 09:22:48', 1),
+(18, '168.192.168.8', 'emma.johnson@msn.com', '2024-12-13 06:37:15', 1),
+(19, '192.168.0.11', 'noah.davies@protonmail.com', '2024-02-01 16:04:29', 1),
+(20, '168.192.168.9', 'amelie.duval@orange.fr', '2024-04-10 14:39:08', 1),
+(21, '192.168.0.12', 'lukas.müller@yahoo.de', '2024-11-23 10:01:30', 1),
+(22, '168.192.168.10', 'hiroshi.tanaka@gmail.com', '2024-03-17 18:43:19', 1),
+(23, '192.168.0.13', 'fatima.al-farsi@msn.com', '2024-07-09 20:25:54', 1),
+(NULL, '168.192.168.11', 'no.authenticated.email@domain.com', '2024-09-25 17:34:51', 0),
+(NULL, '192.168.0.14', 'no.authenticated.email@domain.com', '2024-10-12 14:22:43', 0),
+(NULL, '168.192.168.12', 'no.authenticated.email@domain.com', '2024-12-06 13:17:55', 0),
+(2, '192.168.0.2', 'jane.smith@example.com', '2024-06-17 12:08:14', 1),
+(3, '192.168.0.3', 'alice.johnson@example.com', '2024-02-03 11:16:56', 1),
+(4, '168.192.168.1', 'bob.white@example.com', '2024-10-28 14:42:33', 1),
+(5, '192.168.0.4', 'charlie.brown@example.com', '2024-05-23 07:59:07', 1),
+(6, '168.192.168.2', 'alice.williams@yahoo.com', '2024-03-14 17:11:53', 1),
+(7, '192.168.0.5', 'bob.johnson@msn.com', '2024-07-01 16:29:22', 1),
+(8, '168.192.168.3', 'clara.evans@aol.com', '2024-09-09 09:44:56', 1),
+(9, '192.168.0.6', 'david.brown@outlook.com', '2024-04-25 13:58:39', 1),
+(10, '168.192.168.4', 'emily.clark@hotmail.com', '2024-01-22 20:02:44', 1),
+(11, '192.168.0.7', 'frank.martin@gmail.com', '2024-05-11 10:21:55', 1),
+(12, '168.192.168.5', 'george.white@protonmail.com', '2024-08-18 13:34:25', 1),
+(13, '192.168.0.8', 'hannah.thomas@yahoo.com', '2024-07-06 06:56:12', 1),
+(14, '168.192.168.6', 'isabella.moore@msn.com', '2024-09-20 19:39:29', 1),
+(15, '192.168.0.9', 'sophie.turner@gmail.com', '2024-11-16 21:17:40', 1),
+(16, '168.192.168.7', 'li.wei@outlook.com', '2024-05-02 16:44:57', 1),
+(17, '192.168.0.10', 'miguel.garcia@yahoo.com', '2024-06-30 07:22:13', 1),
+(18, '168.192.168.8', 'emma.johnson@msn.com', '2024-04-05 15:59:44', 1),
+(19, '192.168.0.11', 'noah.davies@protonmail.com', '2024-10-23 08:14:35', 1),
+(20, '168.192.168.9', 'amelie.duval@orange.fr', '2024-07-17 12:50:59', 1),
+(21, '192.168.0.12', 'lukas.müller@yahoo.de', '2024-08-01 14:04:39', 1),
+(22, '168.192.168.10', 'hiroshi.tanaka@gmail.com', '2024-02-13 22:47:26', 1),
+(23, '192.168.0.13', 'fatima.al-farsi@msn.com', '2024-12-03 13:11:08', 1)
+
 
 CREATE INDEX SysLogEmail
 ON SysLog (Email)
@@ -565,38 +637,37 @@ CREATE VIEW AmountofLogins AS
 
 GO
 
-CREATE PROCEDURE TryLogin @email NVARCHAR(255), @password NVARCHAR(50), @ipaddress VARBINARY(4)
+CREATE PROCEDURE setforgottenpassword 
+    @email NVARCHAR(255), 
+    @password NVARCHAR(128), 
+    @token NVARCHAR(50)
 AS
 BEGIN
-	BEGIN TRY
-		SELECT *
-		FROM Users u 
-		LEFT JOIN SysLog sl ON u.UserID = sl.UserID
-		--TODO: add comparison for inputs to match users, create hashing of inserted password
-		--Counter for failed attempts then disable user
-		--##logtable
-		--if isactive is 0 return error msg "not active user"
-	END TRY
-	BEGIN CATCH
-		DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
+    BEGIN TRY
+
+        DECLARE @resetcode NVARCHAR(50), @validto DATETIME
+
+        SELECT @resetcode = resetcode, @validto = validto
+        FROM ##resetpass
+        WHERE resetcode = @token
+
+        IF @token = @resetcode AND GETDATE() < @validto
+        BEGIN
+            UPDATE Users
+            SET PwdHash = dbo.fn_HASHPASSWORD(@password, salt)
+            WHERE email = @email
+        END
+        ELSE
+        BEGIN
+            THROW 50001, 'Invalid or expired token.', 1
+        END
+    END TRY
+    BEGIN CATCH
+       	DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
 		DECLARE @ErrorSeverity INT = ERROR_SEVERITY()
 		DECLARE @ErrorState INT = ERROR_STATE()
 		RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState)
-	END CATCH
+    END CATCH
 END
 GO
 
-CREATE PROCEDURE SetForgottenPassword @email NVARCHAR(255), @password NVARCHAR(255), @token NVARCHAR(50)
-AS
-BEGIN
-	BEGIN TRY
-	--check what email, hash the new password, check if token is valid
-
-	END TRY
-	BEGIN CATCH
-		DECLARE @ErrorMessage NVARCHAR(MAX) = ERROR_MESSAGE()
-		DECLARE @ErrorSeverity INT = ERROR_SEVERITY()
-		DECLARE @ErrorState INT = ERROR_STATE()
-		RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState)
-	END CATCH
-END
