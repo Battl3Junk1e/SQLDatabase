@@ -5,17 +5,38 @@ Demo file, this file displays most/all views, SP, Indexes
 
 /*VIEWS*/
 
-
 --User login shows the latest successful and not successful login per user
 SELECT *
 FROM Userlogin
 
+--More detailed version that shows total attempts and attempt breakdown
+SELECT *
+FROM AmountofLogins
 
 /*
 STORED PROCEDURES
 */
--- Run this to add the testuser below, add your email to see the emails regarding every user
+-- Run this to add the testuser below, add your email if you want to try out the email functionality
 EXEC AddNewUser 'test@test.com','testpasswordhash','TEST','USER','TEST STREET',3,'AB123','TEST CITY','TEST COUNTRY','C',1
+GO
+
+--Run this to test the login for the new user IMPORTANT run the insert statement for it to work.
+INSERT INTO SysLog (UserID, IPAddress, Email, DateTime, IsAuthenticated)
+VALUES (25, '192.168.9.1' , 'test@test.com', '2025-01-12 13:25:00', 1)
+
+EXEC trylogin 'test@test.com','testpasswordhash', '192.168.9.1'
+GO
+
+--Use the userid of the user you want to reset the password for, testuser is 25.
+EXEC forgotpassword 25
+
+--Set a new password with the resetcode generated in SP_forgotpassword, run the select statement to see the resetcode.
+SELECT *
+FROM ##resetpass
+EXEC setforgottenpassword 'test@test.com', 'hello','0E652580-F684-4C60-AD8F-5C2DB0DD47E6'
+
+--Disables the user, which WOULD make it unable to login, not implemented yet
+EXEC DisableUser 25
 
 -- Deletes the user added above
 EXEC DeleteUser 25
@@ -23,46 +44,4 @@ EXEC DeleteUser 25
 -- Shows the last attempted login that was not successful
 EXEC LastNonAuthLogon
 
---Use the userid of the user you want to reset the password for
-EXEC ResetUserPass 25
 
---Disables the user
-EXEC DisableUser 1
-
-EXEC msdb.dbo.sysmail_add_account_sp
-@account_name = 'Server testing mail',
-@description = 'testmail',
-@email_address = '**************',
-@display_name = 'SQL SERVER TEST',
-@mailserver_name = 'smtp.gmail.com',
-@mailserver_type = 'SMTP',
-@port = 587,
-@username = '************',
-@password = '*********',
-@enable_ssl = 1
-
-
--- Test sending an email
-EXEC msdb.dbo.sp_send_dbmail
-    @profile_name = 'SQL SERVER MAIL', -- Mail profile to use
-    @recipients = '@@@@@@', -- Recipient's email address
-    @subject = 'Test Email from SQL Server', -- Email subject
-    @body = 'This is a test email sent from SQL Server using Database Mail??', -- Email body
-    @body_format = 'TEXT' -- Body format as plain text
-
--- View email sending logs
-SELECT 
-    mailitem_id,
-    sent_status,
-    subject,
-    recipients,
-    sent_date,
-    last_mod_date
-FROM msdb.dbo.sysmail_allitems
-ORDER BY sent_date DESC;
-
--- View error logs (if the email fails to send)
-SELECT 
-    * 
-FROM msdb.dbo.sysmail_event_log
-ORDER BY log_date DESC;
