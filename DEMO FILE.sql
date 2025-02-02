@@ -17,14 +17,14 @@ FROM AmountofLogins
 STORED PROCEDURES
 */
 -- Run this to add the testuser below, add your email if you want to try out the email functionality
-EXEC AddNewUser 'test@test.com','testpasswordhash','TEST','USER','TEST STREET',3,'AB123','TEST CITY','TEST COUNTRY','C',1
+EXEC AddNewUser 'test@test.com','testpassword','TEST','USER','TEST STREET',3,'AB123','TEST CITY','TEST COUNTRY','C',1
 GO
 
 --Run this to test the login for the new user IMPORTANT run the insert statement for it to work.
 INSERT INTO SysLog (UserID, IPAddress, Email, DateTime, IsAuthenticated)
 VALUES (25, '192.168.9.1' , 'test@test.com', '2025-01-12 13:25:00', 1)
 
-EXEC trylogin 'test@test.com','testpasswordhash', '192.168.9.1'
+EXEC trylogin 'test@test.com','testpassword', '192.168.9.1'
 GO
 
 --Use the userid of the user you want to reset the password for, testuser is 25.
