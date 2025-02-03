@@ -1,4 +1,5 @@
 site_name: "Harry's Cars DB"
+site_url: https://battl3junk1e.github.io/SQLDatabase/  
 nav:
   - Home: home.md
   - ER-Diagram: erdiagram.md
@@ -9,3 +10,6 @@ nav:
   - Indexes: indexes.md
   - Temp tables: temptables.md
   - Future improvements: futureimprovements.md
+
+repo_name: battl3junk1e/SQLDatabase  # GitHub repository name
+repo_url: https://github.com/battl3junk1e/SQLDatabase  # Link to your GitHub repo
