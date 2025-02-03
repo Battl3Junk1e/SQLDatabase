@@ -1,0 +1,11 @@
+site_name: "Harry's Cars DB"
+nav:
+  - Home: home.md
+  - ER-Diagram: erdiagram.md
+  - Tables: tables.md
+  - Views: views.md
+  - Stored  Procedures: storedprocedures.md
+  - Functions: functions.md
+  - Indexes: indexes.md
+  - Temp tables: temptables.md
+  - Future improvements: futureimprovements.md
