@@ -1,7 +1,7 @@
 site_name: "Harry's Cars DB"
 site_url: https://battl3junk1e.github.io/SQLDatabase/  
 nav:
-  - Home: home.md
+  - Home: index.md
   - ER-Diagram: erdiagram.md
   - Tables: tables.md
   - Views: views.md

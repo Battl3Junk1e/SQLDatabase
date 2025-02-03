@@ -1,3 +1,4 @@
 # ER-Diagram
 
-<img src="/ER-Diagram.png" alt="ER-Diagram">
+
+![ER-Diagram](img/ER-Diagram.png)
