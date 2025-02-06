@@ -297,7 +297,7 @@ VALUES
 ('emma.johnson@msn.com', 'c9f0f895fb98ab9159f51fd0297e236d', 'Emma', 'Johnson', 'Cypress Drive', '29', 'T5K0L4', 'Toronto', 'Canada', 'C'),
 ('noah.davies@protonmail.com', '45c48cce2e2d7fbdea1afc51c7c6ad26', 'Noah', 'Davies', 'Willow Street', '33', '3000', 'Melbourne', 'Australia', 'C'),
 ('amelie.duval@orange.fr', 'd3d9446802a44259755d38e6d163e820', 'Amelie', 'Duval', 'Hawthorn Road', '27', '75001', 'Paris', 'France', 'C'),
-('lukas.müller@yahoo.de', '6512bd43d9caa6e02c990b0a82652dca', 'Lukas', 'Müller', 'Beech Lane', '21', '10115', 'Berlin', 'Germany', 'C'),
+('lukas.mÃ¼ller@yahoo.de', '6512bd43d9caa6e02c990b0a82652dca', 'Lukas', 'MÃ¼ller', 'Beech Lane', '21', '10115', 'Berlin', 'Germany', 'C'),
 ('hiroshi.tanaka@gmail.com', 'aab3238922bcc25a6f606eb525ffdc56', 'Hiroshi', 'Tanaka', 'Cedar Path', '32', '150-0001', 'Tokyo', 'Japan', 'C'),
 ('fatima.al-farsi@msn.com', '9bf31c7ff062936a96d3c8bd1f8f2ff3', 'Fatima', 'Al-Farsi', 'Palm Grove', '26', '113', 'Muscat', 'Oman', 'C'),
 ('peter.nielsen@gmail.com', '70efdf2ec9b086079795c442636b55fb', 'Peter', 'Nielsen', 'Birch Close', '40', '8000', 'Aarhus', 'Denmark', 'C')
@@ -339,7 +339,7 @@ VALUES
 (18, '168.192.168.8', 'emma.johnson@msn.com', '2024-12-13 06:37:15', 1),
 (19, '192.168.0.11', 'noah.davies@protonmail.com', '2024-02-01 16:04:29', 1),
 (20, '168.192.168.9', 'amelie.duval@orange.fr', '2024-04-10 14:39:08', 1),
-(21, '192.168.0.12', 'lukas.müller@yahoo.de', '2024-11-23 10:01:30', 1),
+(21, '192.168.0.12', 'lukas.mÃ¼ller@yahoo.de', '2024-11-23 10:01:30', 1),
 (22, '168.192.168.10', 'hiroshi.tanaka@gmail.com', '2024-03-17 18:43:19', 1),
 (23, '192.168.0.13', 'fatima.al-farsi@msn.com', '2024-07-09 20:25:54', 1),
 (NULL, '168.192.168.11', 'no.authenticated.email@domain.com', '2024-09-25 17:34:51', 0),
@@ -364,15 +364,15 @@ VALUES
 (18, '168.192.168.8', 'emma.johnson@msn.com', '2024-04-05 15:59:44', 1),
 (19, '192.168.0.11', 'noah.davies@protonmail.com', '2024-10-23 08:14:35', 1),
 (20, '168.192.168.9', 'amelie.duval@orange.fr', '2024-07-17 12:50:59', 1),
-(21, '192.168.0.12', 'lukas.müller@yahoo.de', '2024-08-01 14:04:39', 1),
+(21, '192.168.0.12', 'lukas.mÃ¼ller@yahoo.de', '2024-08-01 14:04:39', 1),
 (22, '168.192.168.10', 'hiroshi.tanaka@gmail.com', '2024-02-13 22:47:26', 1),
 (23, '192.168.0.13', 'fatima.al-farsi@msn.com', '2024-12-03 13:11:08', 1)
 
 
 
-CREATE INDEX IXUserIDSysLog
+CREATE INDEX IX_UserIDSysLog
 ON SysLog(UserID)
-CREATE INDEX IXDateTimeSysLog
+CREATE INDEX IX_DateTimeSysLog
 ON SysLog(DateTime)
 
 GO
