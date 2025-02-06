@@ -107,6 +107,14 @@
               <ul class="nav flex-column">
               </ul>
             </li>
+            <li class="nav-item" data-bs-level="2"><a href="#orders-table" class="nav-link">Orders Table</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#orderlines-table" class="nav-link">OrderLines Table</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
               </ul>
             </li>
         </ul>
@@ -115,29 +123,47 @@
                     <div class="col-md-9" role="main">
 
 <h1 id="indexes"><strong>Indexes</strong></h1>
-<p>The following indexes have been created for the tables <code>Users</code> and <code>SysLog</code> to optimize query performance:</p>
+<p>The following indexes have been created for the tables <code>Users</code>, <code>SysLog</code>, <code>Orders</code> and <code>OrderLines</code> to optimize query performance:</p>
 <h2 id="users-table"><strong>Users Table</strong></h2>
 <ul>
-<li><strong>LastName Index</strong>: <code>CREATE INDEX LastName ON Users (LastName)</code></li>
+<li><strong>IX_FirstNameLastName</strong>: <code>CREATE INDEX IX_LastNameFirstName  ON Users (LastName, FirstName)</code></li>
 <li>
-<p>This index improves the performance of queries filtering or sorting by the <code>LastName</code> column.</p>
+<p>This index improves the performance of queries filtering or sorting by the <code>LastName</code> or <code>LastName</code> + <code>FirstName</code> column.</p>
 </li>
 <li>
-<p><strong>StreetName Index</strong>: <code>CREATE INDEX StreetName ON Users (StreetName)</code></p>
+<p><strong>IX_PostalCodeCity Index</strong>: <code>CREATE INDEX IX_PostalCodeCity ON Users (PostalCode, City)</code></p>
 </li>
-<li>
-<p>This index improves the performance of queries filtering or sorting by the <code>StreetName</code> column.</p>
-</li>
-<li>
-<p><strong>PostalCode Index</strong>: <code>CREATE INDEX PostalCode ON Users (PostalCode)</code></p>
-</li>
-<li>This index improves the performance of queries filtering or sorting by the <code>PostalCode</code> column.</li>
+<li>This index improves the performance of queries filtering or sorting by the <code>PostalCode</code> or <code>City</code> column.</li>
 </ul>
 <hr />
 <h2 id="syslog-table"><strong>SysLog Table</strong></h2>
 <ul>
-<li><strong>SysLogEmail Index</strong>: <code>CREATE INDEX SysLogEmail ON SysLog (Email)</code></li>
-<li>This index improves the performance of queries filtering or sorting by the <code>Email</code> column in the <code>SysLog</code> table.</li>
+<li><strong>IX_UserIDSysLog</strong>: <code>CREATE INDEX IX_UserIDSysLog ON SysLog(UserID)</code></li>
+<li>
+<p>This index improves the performance of queries filtering or sorting by the <code>UserID</code> column in the <code>SysLog</code> table.</p>
+</li>
+<li>
+<p><strong>IX_DateTimeSysLog</strong>: <code>CREATE INDEX IX_DateTimeSysLog ON SysLog(DateTime)</code></p>
+</li>
+<li>This index improves the performance of queries filtering or sorting by the <code>DateTime</code> column in the <code>SysLog</code> table.</li>
+</ul>
+<hr />
+<h2 id="orders-table"><strong>Orders Table</strong></h2>
+<ul>
+<li><strong>IX_OrderDateOrders</strong>: <code>CREATE INDEX IX_OrderDateOrders ON Orders(OrderDate)</code></li>
+<li>This index improves the performance of queries filtering or sorting by the <code>OrderDate</code> column in the <code>Orders</code> table.</li>
+</ul>
+<hr />
+<h2 id="orderlines-table"><strong>OrderLines Table</strong></h2>
+<ul>
+<li><strong>IXOrderIDOrderLines</strong>: <code>CREATE INDEX IXOrderIDOrderLines ON OrderLines(OrderID)</code></li>
+<li>
+<p>This index improves the performance of queries filtering or sorting by the <code>OrderID</code> column in the <code>OrderLines</code> table.</p>
+</li>
+<li>
+<p><strong>IXProductIDOrderLines</strong>: <code>CREATE INDEX IXProductIDOrderLines ON OrderLines(ProductID)</code></p>
+</li>
+<li>This index improves the performance of queries filtering or sorting by the <code>ProductID</code> column in the <code>OrderLines</code> table.</li>
 </ul></div>
             </div>
         </div>
