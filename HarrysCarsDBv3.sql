@@ -266,12 +266,12 @@ BEGIN
 END
 GO
 
-CREATE INDEX LastName 
-ON Users (LastName)
+CREATE INDEX IX_FirstNameLastName 
+ON Users (FirstName, LastName)
 CREATE INDEX StreetName
 ON Users (StreetName)
-CREATE INDEX PostalCode
-ON Users (PostalCode)
+CREATE INDEX IX_PostalCodeCity
+ON Users (PostalCode, City)
 
 GO
 
@@ -371,8 +371,11 @@ VALUES
 (23, '192.168.0.13', 'fatima.al-farsi@msn.com', '2024-12-03 13:11:08', 1)
 
 
-CREATE INDEX SysLogEmail
-ON SysLog (Email)
+
+CREATE INDEX IXUserIDSysLog
+ON SysLog(UserID)
+CREATE INDEX IXDateTimeSysLog
+ON SysLog(DateTime)
 
 GO
 
@@ -485,6 +488,9 @@ VALUES
 (20, 16382.3, 1, '2024-11-06', 1, 3),
 (11, 7123.6, 1, '2024-10-22', 1, 4)
 
+CREATE INDEX IX_OrderDateOrders 
+ON Orders(OrderDate)
+
 CREATE TABLE Warehouse
 (
 	WarehouseID INT PRIMARY KEY IDENTITY(1,1),
@@ -517,6 +523,11 @@ CREATE TABLE OrderLines
 	FOREIGN KEY (OrderID) REFERENCES Orders(OrderID),
 	FOREIGN KEY (WarehouseID) REFERENCES Warehouse(WarehouseID)
 )
+CREATE INDEX IXOrderIDOrderLines 
+ON OrderLines(OrderID)
+CREATE INDEX IXProductIDOrderLines 
+ON OrderLines(ProductID)
+
 
 CREATE TABLE Suppliers
 (
