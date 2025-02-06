@@ -266,8 +266,8 @@ BEGIN
 END
 GO
 
-CREATE INDEX IX_FirstNameLastName 
-ON Users (FirstName, LastName)
+CREATE INDEX IX_LastNameFirstName 
+ON Users (LastName, FirstName)
 CREATE INDEX IX_PostalCodeCity
 ON Users (PostalCode, City)
 
